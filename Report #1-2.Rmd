@@ -1,0 +1,212 @@
+---
+title: "Forecasting Model for the ETF (QQQ) and futures contract (NQ)"
+author: "Maha Saya, Ramon Plata-Cossio, Wenchi (Michelle) Lin"
+date: "4/24/2022"
+output:  
+  rmdformats::robobook:
+    highlight: kate
+    code_folding: hide
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 1. Overview of ETF QQQ, futures contract NQ and the market
+
+The Nasdaq-100 is a stock market index that represents 100 of the largest and most actively traded companies, listed on the Nasdaq Stock Market and mainly in the technology, telecom, and biotechnology industry. QQQ is an exchange-traded fund (ETF) that follows the Nasdaq 100, involving many large companies like Meta, Amazon, Google, and Apple. With this ETF, investors are allowed to gain profits from the top 100 non-financial companies on the Nasdaq. In bull markets, this ETF provides investors with the potential for long-term growth whereas in bear markets, QQQ is often overvalued. E-mini Nasdaq-100 (NQ) is the futures contract associated with QQQ. NQ futures allows traders to speculate on the movement of the Nasdaq-100 index in a deep liquidity pool. QQQ and NQ are highly correlated as both products track the same index of the Nasdaq Stock Market.
+
+```{r load data & plot}
+# Load package 'quantmod'
+suppressPackageStartupMessages(library(quantmod)) 
+
+# Import and plot QQQ & Disable warning message 
+options("getSymbols.warning4.0"=FALSE)
+getSymbols('QQQ', src='yahoo', from = '2007-01-03')
+chartSeries(QQQ, theme="white")
+
+# Import and plot NQ & Disable warning message 
+options(warn = -1)
+getSymbols('NQ=F',src='yahoo', from = '2007-01-03')
+NQ <- `NQ=F`
+names(NQ) <- c('NQ.Open', 'NQ.High', 'NQ.Low', 'NQ.Close', 'NQ.Volume', 'NQ.Adjusted')
+chartSeries(NQ, theme="white")
+```
+
+
+# 2. Objective of Financial Time-Series Analysis on QQQ & NQ
+
+In this paper, we are interested in seeing how the futures contract (NQ) is associated with the ETF (QQQ) and how they are impacted by economic changes in the stock market. Our additional focus is the difference in change of each when the Nasdaq-100 fluctuates. The QQQ price often goes up more than the S&P 500 does during bull markets, making it useful for sector rotation strategies. Such that investors can focus their position in a specific sector over a weaker sector. However, the impact of the ETF is more drastic when the Nasdaq-100 decreases in value in the market. By looking at the correlation between the ETF and the future contract we can gain a better understanding of any specific sector in the Nasdaq-100 for what we are most interested in, and recommend better investment strategies for individuals and investors. 
+
+# 3. Descriptive Statistics, Unit-root and Seasonality Tests 
+
+## 3.1 Price
+The daily prices exhibit the random walk behavior, which indicates that future values have no tendency to move closer to the mean. With the augmented Dickey–Fuller test (ADF) tests, p-values larger than 0.05 prove that the prices are not stationary, aligned the pattern in the line charts. In general, both QQQ and NQ prices appear upward trend since 2007 and a price drop lately associated with the coronavirus pandemic of 2020. 
+
+```{r define daily, weekly and monthly indices}
+options(warn = -1)
+# Define daily, weekly and monthly indices
+
+## QQQ
+QQQdaily <- to.daily(QQQ)
+QQQweekly <- to.weekly(QQQ)
+QQQmonthly <- to.monthly(QQQ)
+
+## QQQ log return 
+Qdailyrtn <- diff(log(QQQdaily$QQQ.Adjusted))
+Qweeklyrtn <- diff(log(QQQweekly$QQQ.Adjusted))
+Qmonthlyrtn <- diff(log(QQQmonthly$QQQ.Adjusted))
+
+## NQ
+NQdaily <- to.daily(NQ)
+NQweekly <- to.weekly(NQ)
+NQmonthly <- to.monthly(NQ)
+
+## NQ log return 
+Ndailyrtn <- diff(log(NQdaily$NQ.Adjusted))
+Nweeklyrtn <- diff(log(NQweekly$NQ.Adjusted))
+Nmonthlyrtn <- diff(log(NQmonthly$NQ.Adjusted))
+```
+
+```{r plot: daily adjusted prices}
+suppressPackageStartupMessages(require(tseries))
+QQQnqDailyprices = merge(QQQdaily$QQQ.Adjusted, NQdaily$NQ.Adjusted)
+plot(QQQnqDailyprices, multi.panel=TRUE, yaxis.same=FALSE, 
+     main="Daily adjusted prices on QQQ and E-mini Nasdaq-100 (NQ)", lwd=2, col="blue", grid.col = NA)
+```
+
+```{r adf: daily adjusted prices}
+adf.test(QQQdaily$QQQ.Adjusted)
+adf.test(NQdaily$NQ.Adjusted)
+```
+
+## 3.2 Return
+Rather than prices, daily returns clearly show a mean-reverting behavior and seem to be close to zero. However, the volatility has been changed for ETF and futures contracts. They both have high fluctuation in 2008 (the year of global financial crisis) and 2020 and a few medium waves for other periods. While the volatility is not always stable, tracking the same index Nasdaq-100 explained the coincidence of high and low volatility periods across these two assets. 
+
+```{r plot: daily log returns}
+QQQnqDailyRets = na.omit(diff(log(QQQnqDailyprices)))
+plot(QQQnqDailyRets, multi.panel=TRUE, yaxis.same=FALSE, 
+     main="Daily log returns on QQQ and E-mini Nasdaq-100 (NQ)", lwd=2, col="blue", grid.col = NA)
+```
+
+```{r adf: daily log returns}
+adf.test(na.omit(Qdailyrtn))
+adf.test(na.omit(Ndailyrtn))
+```
+
+```{r plot: monthly log returns}
+QQQnqMonthlyyprices = merge(QQQmonthly$QQQ.Adjusted, NQmonthly$NQ.Adjusted)
+QQnqMonthlyRets = na.omit(diff(log(QQQnqMonthlyyprices)))
+plot(QQnqMonthlyRets, multi.panel=TRUE, yaxis.same=FALSE, 
+     main="Monthly log returns on QQQ and E-mini Nasdaq-100 (NQ)", lwd=2, col="blue", grid.col = NA)
+```
+
+```{r adf: monthly log returns}
+adf.test(na.omit(Qmonthlyrtn))
+adf.test(na.omit(Nmonthlyrtn))
+```
+
+## 3.3 Trade Volume 
+The monthly data of both series clearly reveal the volatility in the patterns and ADF test results of larger p-values. It indicates that compared to the daily volumes, the monthly trade data is  more appropriate to use for analyzing the trend of non-stationary behavior. Besides that, fluctuations in QQQ and NQ do not coincide with each other as the consistency in returns, and this difference may be interpreted by the respective point of view between ETF investors and those who are interested in future contracts.
+
+```{r plot: daily trade volume}
+QQQnqDailyvolumes = merge(QQQdaily$QQQ.Volume, NQdaily$NQ.Volume)
+plot(QQQnqDailyvolumes/1000000, multi.panel=TRUE, yaxis.same=FALSE, 
+     main="Daily trade volume (million) on QQQ and E-mini Nasdaq-100 (NQ) ", lwd=2, col="blue", grid.col = NA)
+```
+
+```{r adf: daily trade volume }
+adf.test(QQQdaily$QQQ.Volume)
+adf.test(NQdaily$NQ.Volume)
+```
+
+```{r plot: monthly trade volume}
+QQQnqMonthlyvolumes = merge(QQQmonthly$QQQ.Volume, NQmonthly$NQ.Volume)
+plot(QQQnqMonthlyvolumes/1000000, multi.panel=TRUE, yaxis.same=FALSE, 
+     main="Monthly trade volume (million) on QQQ and E-mini Nasdaq-100 (NQ)", lwd=2, col="blue", grid.col = NA)
+```
+
+```{r adf: monthly trade volume}
+adf.test(QQQmonthly$QQQ.Volume)
+adf.test(NQmonthly$NQ.Volume)
+```
+
+## 3.4 Seasonality Test
+With our ACF visualizations, it is evident that there is no seasonality in either the QQQ and the NQ monthly or daily returns. Therefore, we do not need to formally test for seasonality with the QQQ and NQ ETFs.  
+
+```{r fit daily, weekly and monthly indices into dataframes}
+# Fit daily, weekly and monthly indices into dataframes
+
+## QQQ
+df_QQQdaily <- data.frame(Date=index(QQQdaily), coredata(QQQdaily))
+df_QQQweekly <- data.frame(Date=index(QQQweekly), coredata(QQQweekly))
+df_QQQmonthly <- data.frame(Date=index(QQQmonthly), coredata(QQQmonthly))
+
+## QQQ log return 
+df_Qdailyrtn <- diff(log(df_QQQdaily$QQQ.Adjusted))
+df_Qweeklyrtn <- diff(log(df_QQQweekly$QQQ.Adjusted))
+df_Qmonthlyrtn <- diff(log(df_QQQmonthly$QQQ.Adjusted))
+
+## NQ
+df_NQdaily <- data.frame(Date=index(NQdaily), coredata(NQdaily))
+df_NQweekly <- data.frame(Date=index(NQweekly), coredata(NQweekly))
+df_NQmonthly <- data.frame(Date=index(NQmonthly), coredata(NQmonthly))
+
+## NQ log return  
+df_Ndailyrtn <- diff(log(df_NQdaily$NQ.Adjusted))
+df_Nweeklyrtn <- diff(log(df_NQweekly$NQ.Adjusted))
+df_Nmonthlyrtn <- diff(log(df_NQmonthly$NQ.Adjusted))
+```
+
+```{r acf, fig.align = "center"}
+par(mfrow=c(2,2), mar=c(3,3,3,1))
+acf(df_Qdailyrtn, main="QQQ Daily Return", lwd=2)
+acf(df_Ndailyrtn, main="NQ Daily Return", lwd=2)
+acf(df_Qmonthlyrtn, main="QQQ Monthly Return", lwd=2)
+acf(df_Nmonthlyrtn, main="NQ Monthly Return", lwd=2)
+```
+
+# 4. ARIMA Model Representation
+
+The ARIMA (1, 1, 0) with drift model for the QQQ daily price forecast shows the predicted price of the ETF for the next 365 days. On the other hand, the monthly price forecast shows an ARIMA (0, 2, 1) model. For the QQQ daily returns, the forecast model produces an ARIMA (1, 0, 0) model with a non-zero mean while the monthly returns create an ARIMA (0, 0, 0) model. The model produced for the NQ daily price is an ARIMA (0, 1, 0) model with drift while for the monthly price it is an ARIMA (0, 0, 0) model. The forecast of the NQ ETF creates an ARIMA (2, 0, 1) model for the daily returns and creates an ARIMA (0, 0, 0) model for the monthly returns. The forecast visualizations for each ETF are provided below. 
+
+```{r arima models}
+suppressPackageStartupMessages(require(forecast))
+
+sim_QQQdailyPrice <- auto.arima(QQQdaily$QQQ.Adjusted, seasonal = FALSE)
+sim_QQQdailyRtn<- auto.arima(Qdailyrtn)
+sim_QQQdailyVolume<- auto.arima(QQQmonthly$QQQ.Volume)
+
+sim_NQdailyPrice <-auto.arima(NQdaily$NQ.Adjusted)
+sim_NQdailyRtn <- auto.arima(Ndailyrtn)
+
+sim_QQQmonthlyPrice <- auto.arima(QQQmonthly$QQQ.Adjusted, seasonal = FALSE)
+sim_QQQmonthlyRtn<- auto.arima(Qmonthlyrtn)
+
+sim_NQmonthlyRrice <-auto.arima(NQmonthly$NQ.Adjusted)
+sim_NQmonthlyRtn <- auto.arima(Nmonthlyrtn)
+```
+
+
+**Figure: Daily Forecasts on QQQ and E-mini Nasdaq-100 (NQ)**
+
+```{r plot: daily forecasts}
+par(mfrow=c(2,2), mar=c(3,3,3,1))
+plot(forecast(sim_QQQdailyPrice, 365), main = "QQQ Price Forcasts from ARIMA(1, 1, 0)")
+plot(forecast(sim_NQdailyPrice, 365), main = "NQ Price Forcasts from ARIMA(0, 1, 1)")
+plot(forecast(sim_QQQdailyRtn, 365), main = "QQQ Return Forcasts from ARIMA(1, 0, 0)")
+plot(forecast(sim_NQdailyRtn, 365), main = "NQ Return Forcasts from ARIMA(2, 0, 1)")
+```
+
+
+
+**Figure: Return Forecasts on QQQ and E-mini Nasdaq-100 (NQ)**
+
+```{r plot: return forecasts }
+par(mfrow=c(2,2), mar=c(3,3,3,1))
+plot(forecast(sim_QQQmonthlyPrice, 36), main = "QQQ Price Forcasts from ARIMA(0, 2, 1)")
+plot(forecast(sim_NQmonthlyRrice, 36), main = "NQ Price Forcasts from ARIMA(0, 1, 0)")
+plot(forecast(sim_QQQmonthlyRtn, 36), main = "QQQ Return Forcasts from ARIMA(0, 0, 0)")
+plot(forecast(sim_NQmonthlyRtn, 36), main = "NQ Return Forcasts from ARIMA(0, 0, 0)")
+```
